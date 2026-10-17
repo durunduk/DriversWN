@@ -24,6 +24,10 @@ NDK_VER="android-ndk-r26d"
 NDK_DIR="${ANDROID_NDK_HOME:-$BASE_DIR/$NDK_VER}"
 OUT_DIR="${OUT_DIR:-$HOME/WinNative-builds}"
 MIN_MESON="1.4.0"
+# WinNative refuses to install a driver whose meta.json name is already
+# installed ("Driver already installed"), so every build gets its own version.
+BUILD_VERSION="${BUILD_VERSION:-dev-$(date +%m%d-%H%M)}"
+export BUILD_VERSION
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -113,15 +117,16 @@ if ! ./verify_patches.sh "$VARIANT"; then
 	echo "         The driver is still usable; send build_log_${VARIANT}.txt if something looks wrong."
 fi
 
-zip_name="WN-Turnip-1.0-${VARIANT}_Axxx.zip"
+zip_name="WN-Turnip-${BUILD_VERSION}-${VARIANT}_Axxx.zip"
 zip_path="$(dirname "$SRC_DIR")/$zip_name"
 [ -f "$zip_path" ] || zip_path="$SRC_DIR/$zip_name"
 [ -f "$zip_path" ] || fail "Build finished but $zip_name was not found."
 
 mkdir -p "$OUT_DIR"
 mesa_hash="$(cut -c1-10 "$SRC_DIR/mesa_hash.txt" 2>/dev/null || echo unknown)"
-out="$OUT_DIR/WN-Turnip-${VARIANT}-$(date +%Y%m%d-%H%M)-mesa-${mesa_hash}-$(git rev-parse --short HEAD).zip"
+out="$OUT_DIR/WN-Turnip-${BUILD_VERSION}-${VARIANT}-mesa-${mesa_hash}-$(git rev-parse --short HEAD).zip"
 cp "$zip_path" "$out"
 
 printf '\n\033[1;32mDone:\033[0m %s\n' "$out"
 echo "Copy it to the phone and install it in WinNative's driver manager."
+echo "In WinNative it appears as: WN-Turnip-${BUILD_VERSION}-${VARIANT} Axxx (select it in the game's graphics driver setting)."
