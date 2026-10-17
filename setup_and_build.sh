@@ -8,6 +8,7 @@
 #   bash setup_and_build.sh                 # balanced variant (b)
 #   VARIANT=p bash setup_and_build.sh       # performance variant
 #   BRANCH=main bash setup_and_build.sh     # another branch of the fork
+#   BASE_DIR=/mnt/build bash setup_and_build.sh   # work on another disk (sources, NDK, build)
 #
 # Run without downloading it first:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/durunduk/DriversWN/feature/ubo16-opt-in/setup_and_build.sh)
@@ -17,9 +18,10 @@ set -euo pipefail
 REPO_URL="${REPO_URL:-https://github.com/durunduk/DriversWN.git}"
 BRANCH="${BRANCH:-feature/ubo16-opt-in}"
 VARIANT="${VARIANT:-b}"
-SRC_DIR="${SRC_DIR:-$HOME/DriversWN}"
+BASE_DIR="${BASE_DIR:-$HOME}"
+SRC_DIR="${SRC_DIR:-$BASE_DIR/DriversWN}"
 NDK_VER="android-ndk-r26d"
-NDK_DIR="${ANDROID_NDK_HOME:-$HOME/$NDK_VER}"
+NDK_DIR="${ANDROID_NDK_HOME:-$BASE_DIR/$NDK_VER}"
 OUT_DIR="${OUT_DIR:-$HOME/WinNative-builds}"
 MIN_MESON="1.4.0"
 
@@ -30,8 +32,10 @@ fail() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 command -v apt-get >/dev/null || fail "This script supports Ubuntu/Debian (apt) only."
 
 # ------------------------------------------------------------------ disk space
-free_gb=$(( $(df -Pk "$HOME" | awk 'NR==2 {print $4}') / 1024 / 1024 ))
-[ "$free_gb" -ge 6 ] || fail "Need at least 6 GB free in $HOME, have ${free_gb} GB."
+mkdir -p "$BASE_DIR" 2>/dev/null || fail "Cannot create $BASE_DIR"
+[ -w "$BASE_DIR" ] || fail "$BASE_DIR is not writable by $(whoami) (sudo chown $(whoami): $BASE_DIR)"
+free_gb=$(( $(df -Pk "$BASE_DIR" | awk 'NR==2 {print $4}') / 1024 / 1024 ))
+[ "$free_gb" -ge 6 ] || fail "Need at least 6 GB free in $BASE_DIR, have ${free_gb} GB."
 
 # ------------------------------------------------------------------ packages
 step "Installing packages (sudo password may be asked)"
@@ -67,12 +71,12 @@ fi
 # ------------------------------------------------------------------ NDK
 if [ ! -x "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
 	step "Downloading $NDK_VER (about 1 GB, once)"
-	tmp_zip="$HOME/$NDK_VER-linux.zip"
+	tmp_zip="$BASE_DIR/$NDK_VER-linux.zip"
 	curl -fL --retry 3 -o "$tmp_zip" "https://dl.google.com/android/repository/$NDK_VER-linux.zip"
-	rm -rf "$HOME/$NDK_VER"
-	unzip -q "$tmp_zip" -d "$HOME"
+	rm -rf "$BASE_DIR/$NDK_VER"
+	unzip -q "$tmp_zip" -d "$BASE_DIR"
 	rm -f "$tmp_zip"
-	NDK_DIR="$HOME/$NDK_VER"
+	NDK_DIR="$BASE_DIR/$NDK_VER"
 fi
 export ANDROID_NDK_HOME="$NDK_DIR"
 echo "NDK: $ANDROID_NDK_HOME"
