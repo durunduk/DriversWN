@@ -35,6 +35,7 @@ common=(
 	"vendor UBWC bit on the AHB usage answer"
 	"vk_physical_device vendor-usage field"
 	"turnip sets the vendor usage bit"
+	"enable_ubo16_opt_in.py: done"
 )
 
 # -p only: without these the archive is a -b wearing a -p name.
