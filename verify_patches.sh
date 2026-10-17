@@ -35,7 +35,13 @@ common=(
 	"vendor UBWC bit on the AHB usage answer"
 	"vk_physical_device vendor-usage field"
 	"turnip sets the vendor usage bit"
-	"enable_ubo16_opt_in.py: done"
+	"a8xx-winnative: applied 0001"
+	"a8xx-winnative: applied 0002"
+	"a8xx-winnative: applied 0003"
+	"a8xx-winnative: applied 0004"
+	"a8xx-winnative: applied 0005"
+	"a8xx-winnative: applied 0006"
+	"a8xx-winnative: applied 0007"
 )
 
 # -p only: without these the archive is a -b wearing a -p name.

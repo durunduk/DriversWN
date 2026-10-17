@@ -1,0 +1,14 @@
+0001-0005  MaxsTechReview (WinNative-Emu/Drivers linux/patches), as rebased onto
+           Mesa main by The412Banner/Banners-Turnip patches/a8xx-winnative
+           (Banners commit d11be2d, verified against Mesa 14a19dd, 2026-10-16).
+           0002, 0003, 0005 are byte-identical to linux/patches; 0001 and 0004
+           only differ by upstream rebase (C++ casts, dropped tu6_emit_flushes
+           hunk now in Mesa via MR 45129).
+0006       WinNative-Emu/Drivers linux/patches/0006 (retired A8XX IB cache).
+0007       This fork: default 0001 (mesh shaders) and 0002 (half-wave
+           subgroups) to A8XX; TU_MESH_SHADER / TU_HALF_SUBGROUPS override.
+
+Runtime switches:
+  TU_MESH_SHADER=false     disable VK_EXT_mesh_shader emulation on A8XX
+  TU_HALF_SUBGROUPS=false  report minSubgroupSize 64 again (no WaveSize(32))
+  TU_KGSL_IB_CACHE=false   disable the 0006 IB cache

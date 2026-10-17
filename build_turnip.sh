@@ -120,6 +120,33 @@ build_lib_for_android(){
 		python3 "../../patches/apply_balance_variant.py" || { echo -e "${red}Balance variant script failed!${nocolor}"; exit 1; }
 	fi
 
+	# WinNative A8XX series as git patches (mesh shader emulation, WaveSize(32)
+	# half-wave subgroups, A8XX bindless invalidation and hang fixes) plus the
+	# A8XX-default gate. Applied after the Python scripts on purpose:
+	# fix_a8xx_dev_info.py resets freedreno_dev_info.h, which 0003 extends.
+	# A patch that no longer applies is skipped with a warning; each patch is
+	# atomic, so a skipped one never leaves a half-patched tree.
+	if [ -n "${GIT_PATCH_DIR:-}" ] && [ -f .wn_git_patches_applied ]; then
+		# Re-run on an already patched tree: later patches touch the same
+		# lines, so per-patch reverse checks would misreport. Trust the marker.
+		sed 's/^/a8xx-winnative: applied /; s/$/ (earlier run)/' .wn_git_patches_applied
+	elif [ -n "${GIT_PATCH_DIR:-}" ] && [ -d "../../$GIT_PATCH_DIR" ]; then
+		: > .wn_git_patches_applied.tmp
+		for P in "../../$GIT_PATCH_DIR"/*.patch; do
+			[ -f "$P" ] || continue
+			pname=$(basename "$P")
+			pnum=${pname%%-*}
+			if git apply --check "$P" 2>/dev/null; then
+				git apply "$P" && echo "a8xx-winnative: applied $pnum" && echo "$pnum" >> .wn_git_patches_applied.tmp
+			elif git apply --check -R "$P" 2>/dev/null; then
+				echo "a8xx-winnative: applied $pnum (already in Mesa)"
+			else
+				echo -e "${red}WARNING: a8xx-winnative: $pname does not apply to this Mesa, skipping${nocolor}"
+			fi
+		done
+		mv .wn_git_patches_applied.tmp .wn_git_patches_applied
+	fi
+
 	# Preventive fixes for NDK r29 compilation
 	sed -i 's/typedef const native_handle_t\* buffer_handle_t;/typedef void\* buffer_handle_t;/g' include/android_stub/cutils/native_handle.h || true
 	sed -i 's/, hnd->handle/, (void \*)hnd->handle/g' src/util/u_gralloc/u_gralloc_fallback.c || true

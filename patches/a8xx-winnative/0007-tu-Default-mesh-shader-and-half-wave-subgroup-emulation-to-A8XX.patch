@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: durunduk <drebdebian@gmail.com>
+Date: Sun, 18 Oct 2026 01:44:28 +0300
+Subject: [PATCH] tu: Default mesh shader and half-wave subgroup emulation to
+ A8XX
+
+The WinNative series enables VK_EXT_mesh_shader emulation on chip >= 7 and
+WaveSize(32) half-wave subgroups on every GPU with getfiberid. A single
+driver build ships to A6XX/A7XX devices as well, where both only steer
+D3D12 titles onto emulated paths. Default both to A8XX, which needs them,
+and allow TU_MESH_SHADER and TU_HALF_SUBGROUPS to override the default.
+---
+ src/freedreno/vulkan/tu_device.cc | 21 +++++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
+index 307298d..bc5af61 100644
+--- a/src/freedreno/vulkan/tu_device.cc
++++ b/src/freedreno/vulkan/tu_device.cc
+@@ -200,8 +200,15 @@ is_kgsl(struct tu_instance *instance)
+ static bool
+ tu_has_mesh_shader(const struct tu_physical_device *device)
+ {
+-   return device->info->chip >= 7 &&
+-          device->info->cs_shared_mem_size >= 32 * 1024;
++   if (device->info->chip < 7 ||
++       device->info->cs_shared_mem_size < 32 * 1024)
++      return false;
++
++   /* The emulation renders mesh passes in sysmem; on A7XX that can steer
++    * D3D12 titles onto slower paths, so it defaults to A8XX only.
++    * TU_MESH_SHADER=true/false overrides the default.
++    */
++   return debug_get_bool_option("TU_MESH_SHADER", device->info->chip >= A8XX);
+ }
+ 
+ static uint32_t
+@@ -217,8 +224,14 @@ tu_subgroup_size(const struct tu_physical_device *device)
+ static uint32_t
+ tu_min_subgroup_size(const struct tu_physical_device *device)
+ {
+-   return device->info->threadsize_base /
+-          (device->info->props.has_getfiberid ? 2 : 1);
++   /* Half-wave subgroups are needed on A8XX, which only runs 64-wide waves.
++    * Elsewhere they would only steer apps onto WaveSize(32) paths, so they
++    * default to A8XX only. TU_HALF_SUBGROUPS=true/false overrides.
++    */
++   bool half = device->info->props.has_getfiberid &&
++               debug_get_bool_option("TU_HALF_SUBGROUPS",
++                                     device->info->chip >= A8XX);
++   return device->info->threadsize_base / (half ? 2 : 1);
+ }
+ 
+ static void
+-- 
+2.43.0
+

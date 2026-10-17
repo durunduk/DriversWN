@@ -11,12 +11,12 @@
 #   BASE_DIR=/mnt/build bash setup_and_build.sh   # work on another disk (sources, NDK, build)
 #
 # Run without downloading it first:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/durunduk/DriversWN/feature/ubo16-opt-in/setup_and_build.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/durunduk/DriversWN/feature/a8xx-winnative/setup_and_build.sh)
 
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/durunduk/DriversWN.git}"
-BRANCH="${BRANCH:-feature/ubo16-opt-in}"
+BRANCH="${BRANCH:-feature/a8xx-winnative}"
 VARIANT="${VARIANT:-b}"
 BASE_DIR="${BASE_DIR:-$HOME}"
 SRC_DIR="${SRC_DIR:-$BASE_DIR/DriversWN}"
@@ -102,8 +102,12 @@ step "Building WN-Turnip variant '$VARIANT' (downloads current Mesa, 10-30 min)"
 BUILD_VARIANTS="$VARIANT" ./build_wn_turnip.sh
 
 step "Checking that every patch was applied"
-grep -q "enable_ubo16_opt_in.py: done" "build_log_${VARIANT}.txt" \
-	|| fail "The TU_UBO16 patch did not apply (see build_log_${VARIANT}.txt). Send that log."
+# 0002 (WaveSize(32)) and 0004 (A8XX bindless invalidation) are the ones the
+# A8XX rendering fixes depend on; without them the zip is not worth testing.
+for n in 0002 0004; do
+	grep -q "a8xx-winnative: applied $n" "build_log_${VARIANT}.txt" \
+		|| fail "Patch $n of the A8XX series did not apply (see build_log_${VARIANT}.txt). Send that log."
+done
 if ! ./verify_patches.sh "$VARIANT"; then
 	echo "Warning: some other WinNative patches did not apply (lines above)."
 	echo "         The driver is still usable; send build_log_${VARIANT}.txt if something looks wrong."
