@@ -13,7 +13,7 @@ Runtime switches:
   TU_HALF_SUBGROUPS=false  report minSubgroupSize 64 again (no WaveSize(32))
   TU_KGSL_IB_CACHE=false   disable the 0006 IB cache
   TU_ALIGN_64K=0           disable the 0008 64 KiB allocation alignment
-  TU_FLUSH_HACK=none       disable the 0009 A8XX barrier flush; =uche etc. narrows it to one cache
+  TU_FLUSH_HACK=none       disable the 0009 A8XX barrier CP waits (other values: see the patch)
 
 0008 is ours: vkd3d-proton logged "Requested alignment of 10000, but got GPU VA
 of 400c05e000 ... not aligned as expected" on Styx: Blades of Greed (UE 5.6, A840).
