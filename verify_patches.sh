@@ -44,6 +44,7 @@ common=(
 	"a8xx-winnative: applied 0005"
 	"a8xx-winnative: applied 0006"
 	"a8xx-winnative: applied 0007"
+	"a8xx-winnative: applied 0008"
 )
 
 # -p only: without these the archive is a -b wearing a -p name.

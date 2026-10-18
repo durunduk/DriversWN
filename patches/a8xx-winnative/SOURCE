@@ -12,3 +12,7 @@ Runtime switches:
   TU_MESH_SHADER=false     disable VK_EXT_mesh_shader emulation on A8XX
   TU_HALF_SUBGROUPS=false  report minSubgroupSize 64 again (no WaveSize(32))
   TU_KGSL_IB_CACHE=false   disable the 0006 IB cache
+  TU_ALIGN_64K=0           disable the 0008 64 KiB allocation alignment
+
+0008 is ours: vkd3d-proton logged "Requested alignment of 10000, but got GPU VA
+of 400c05e000 ... not aligned as expected" on Styx: Blades of Greed (UE 5.6, A840).

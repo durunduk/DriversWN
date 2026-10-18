@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: durunduk <drebdebian@gmail.com>
+Date: Sun, 18 Oct 2026 12:10:00 +0300
+Subject: [PATCH] tu: Align allocations of 64 KiB and more to 64 KiB
+
+D3D12 guarantees 64 KiB aligned GPU virtual addresses and UE5 relies on
+it. kgsl only page-aligns by default and the WinNative Vulkan wrapper
+does not forward VK_VALVE_buffer_device_address_allocation_alignment, so
+vkd3d-proton gets 4-8 KiB aligned heaps ("Requested alignment of 10000,
+but got GPU VA of ... which is not aligned as expected") while UE 5.6
+(Styx: Blades of Greed, Adreno 840) renders shattered geometry. The
+misalignment is the suspected cause.
+
+Default every allocation of at least 64 KiB to 64 KiB alignment, as
+desktop drivers effectively do. TU_ALIGN_64K=0 restores the old
+behaviour.
+---
+diff --git a/src/freedreno/vulkan/tu_device.cc b/src/freedreno/vulkan/tu_device.cc
+index 4f15084..6a24885 100644
+--- a/src/freedreno/vulkan/tu_device.cc
++++ b/src/freedreno/vulkan/tu_device.cc
+@@ -3746,6 +3746,20 @@ tu_AllocateMemory(VkDevice _device,
+                            BUFFER_DEVICE_ADDRESS_ALIGNMENT_ALLOCATE_INFO_VALVE);
+    uint64_t alignment = align_info ? align_info->alignment : 0;
+ 
++   /* D3D12 guarantees 64 KiB aligned GPU addresses for heaps and buffers and
++    * UE5 relies on it (vkd3d-proton: "UE5 relies on GPUVAs to be aligned to
++    * the heap alignment"). kgsl only page-aligns by default, so allocations
++    * through translation layers that do not request an alignment (the
++    * WinNative Vulkan wrapper does not know VK_VALVE_buffer_device_address_
++    * allocation_alignment) get 4-8 KiB aligned addresses, suspected to
++    * shatter UE5 geometry. Desktop drivers align large allocations anyway.
++    * TU_ALIGN_64K=0 restores the old behaviour.
++    */
++   if (alignment < (1ull << 16) &&
++       pAllocateInfo->allocationSize >= (1ull << 16) &&
++       debug_get_bool_option("TU_ALIGN_64K", true))
++      alignment = 1ull << 16;
++
+    if (fd_info && fd_info->handleType) {
+       assert(fd_info->handleType ==
+                 VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT ||
