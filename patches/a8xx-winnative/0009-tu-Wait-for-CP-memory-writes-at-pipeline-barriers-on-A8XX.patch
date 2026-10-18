@@ -15,13 +15,16 @@ TU_FLUSH_HACK=<items> overrides the default (comma separated):
   barrier | draw              where to apply (default: barrier)
   bindless, uche, ccu, cche, wait, wait_mem, wait_me, all
                               what to apply (default: everything)
+  dst_cp, dst_vtx, dst_late, src_compute, src_xfer, src_gfx, src_all,
+  in_rp, out_rp               only barriers in one of these categories
   none                        upstream behaviour
+e.g. TU_FLUSH_HACK=wait,dst_cp waits only before CP reads (indirect args).
 ---
 diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
-index ea1cecd..9ace00a 100644
+index ea1cecd..ee16b85 100644
 --- a/src/freedreno/vulkan/tu_cmd_buffer.cc
 +++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
-@@ -354,6 +354,111 @@ tu_emit_rt_workaround(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
+@@ -354,6 +354,152 @@ tu_emit_rt_workaround(struct tu_cmd_buffer *cmd, struct tu_cs *cs)
     tu_cs_emit(cs, A6XX_CP_SET_MARKER_0_RT_WA_END);
  }
  
@@ -35,6 +38,9 @@ index ea1cecd..9ace00a 100644
 + *
 + * TU_FLUSH_HACK=<items> overrides the default (comma separated):
 + *   barrier   apply at pipeline barriers (implied when only parts are given)
++ *   dst_cp, dst_vtx, dst_late, src_compute, src_xfer, src_gfx, src_all,
++ *   in_rp, out_rp
++ *             only at barriers in at least one of these categories
 + *   draw      apply at every draw and dispatch instead (like flushall)
 + *   bindless, uche, ccu, cche, wait, wait_mem, wait_me
 + *             parts to apply; nothing named means all of flushall
@@ -45,6 +51,20 @@ index ea1cecd..9ace00a 100644
 +   bool at_barrier;
 +   bool at_draw;
 +   uint32_t bits;
++   uint32_t filters;  /* TU_BARRIER_CAT_*: only barriers in these */
++};
++
++/* Barrier categories for narrowing down which barrier needs the waits. */
++enum {
++   TU_BARRIER_CAT_DST_CP      = 1u << 0, /* read next by the CP (indirect) */
++   TU_BARRIER_CAT_DST_VTX     = 1u << 1, /* read next by vertex/index fetch */
++   TU_BARRIER_CAT_DST_LATE    = 1u << 2, /* read next by shaders/later */
++   TU_BARRIER_CAT_SRC_COMPUTE = 1u << 3, /* written by compute */
++   TU_BARRIER_CAT_SRC_XFER    = 1u << 4, /* written by copy/clear/blit */
++   TU_BARRIER_CAT_SRC_GFX     = 1u << 5, /* written by graphics */
++   TU_BARRIER_CAT_SRC_ALL     = 1u << 6, /* src ALL_COMMANDS */
++   TU_BARRIER_CAT_IN_RP       = 1u << 7, /* inside a render pass */
++   TU_BARRIER_CAT_OUT_RP      = 1u << 8, /* outside a render pass */
 +};
 +
 +static struct tu_flush_hack
@@ -89,6 +109,24 @@ index ea1cecd..9ace00a 100644
 +         part = TU_CMD_FLAG_WAIT_MEM_WRITES;
 +      } else if (!strcmp(tok, "wait_me")) {
 +         part = TU_CMD_FLAG_WAIT_FOR_ME;
++      } else if (!strcmp(tok, "dst_cp")) {
++         h.filters |= TU_BARRIER_CAT_DST_CP;
++      } else if (!strcmp(tok, "dst_vtx")) {
++         h.filters |= TU_BARRIER_CAT_DST_VTX;
++      } else if (!strcmp(tok, "dst_late")) {
++         h.filters |= TU_BARRIER_CAT_DST_LATE;
++      } else if (!strcmp(tok, "src_compute")) {
++         h.filters |= TU_BARRIER_CAT_SRC_COMPUTE;
++      } else if (!strcmp(tok, "src_xfer")) {
++         h.filters |= TU_BARRIER_CAT_SRC_XFER;
++      } else if (!strcmp(tok, "src_gfx")) {
++         h.filters |= TU_BARRIER_CAT_SRC_GFX;
++      } else if (!strcmp(tok, "src_all")) {
++         h.filters |= TU_BARRIER_CAT_SRC_ALL;
++      } else if (!strcmp(tok, "in_rp")) {
++         h.filters |= TU_BARRIER_CAT_IN_RP;
++      } else if (!strcmp(tok, "out_rp")) {
++         h.filters |= TU_BARRIER_CAT_OUT_RP;
 +      }
 +      if (part) {
 +         h.bits |= part;
@@ -120,11 +158,17 @@ index ea1cecd..9ace00a 100644
 +
 +/* Extra flush bits for a pipeline barrier. */
 +static inline uint32_t
-+tu_flush_hack_barrier_bits(const struct tu_cmd_buffer *cmd)
++tu_flush_hack_barrier_bits(const struct tu_cmd_buffer *cmd, uint32_t cats)
 +{
 +   const struct tu_flush_hack &h = tu_flush_hack_get();
-+   if (h.set)
-+      return h.at_barrier ? h.bits : 0;
++   if (h.set) {
++      if (!h.at_barrier)
++         return 0;
++      /* With category filters, a barrier must match at least one. */
++      if (h.filters && !(h.filters & cats))
++         return 0;
++      return h.bits;
++   }
 +   if (cmd->device->physical_device->info->chip >= A8XX)
 +      return TU_CMD_FLAG_WAIT_MEM_WRITES | TU_CMD_FLAG_WAIT_FOR_ME;
 +   return 0;
@@ -133,7 +177,7 @@ index ea1cecd..9ace00a 100644
  template <chip CHIP>
  static void
  tu6_emit_flushes(struct tu_cmd_buffer *cmd_buffer,
-@@ -366,6 +471,8 @@ tu6_emit_flushes(struct tu_cmd_buffer *cmd_buffer,
+@@ -366,6 +512,8 @@ tu6_emit_flushes(struct tu_cmd_buffer *cmd_buffer,
     if (TU_DEBUG(FLUSHALL))
        flushes |= TU_CMD_FLAG_ALL_CLEAN | TU_CMD_FLAG_ALL_INVALIDATE;
  
@@ -142,7 +186,7 @@ index ea1cecd..9ace00a 100644
     if (TU_DEBUG(SYNCDRAW))
        flushes |= TU_CMD_FLAG_WAIT_MEM_WRITES |
                   TU_CMD_FLAG_WAIT_FOR_IDLE |
-@@ -629,7 +736,7 @@ void
+@@ -629,7 +777,7 @@ void
  tu_emit_cache_flush_renderpass(struct tu_cmd_buffer *cmd_buffer)
  {
     if (!cmd_buffer->state.renderpass_cache.flush_bits &&
@@ -151,12 +195,38 @@ index ea1cecd..9ace00a 100644
        return;
  
     struct tu_cs *cs = &cmd_buffer->draw_cs;
-@@ -10966,6 +11073,9 @@ tu_barrier(struct tu_cmd_buffer *cmd,
+@@ -10966,6 +11114,35 @@ tu_barrier(struct tu_cmd_buffer *cmd,
  
     TU_CALLX(cmd->device, tu_flush_for_access)(cache, src_flags, dst_flags);
  
++   uint32_t cats = 0;
++   switch (vk2tu_dst_stage(cmd->device, dstStage)) {
++   case TU_STAGE_BV_CP: cats |= TU_BARRIER_CAT_DST_CP; break;
++   case TU_STAGE_BV:    cats |= TU_BARRIER_CAT_DST_VTX; break;
++   default:             cats |= TU_BARRIER_CAT_DST_LATE; break;
++   }
++   if (srcStage & (VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT))
++      cats |= TU_BARRIER_CAT_SRC_COMPUTE;
++   if (srcStage & (VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT |
++                   VK_PIPELINE_STAGE_2_COPY_BIT |
++                   VK_PIPELINE_STAGE_2_RESOLVE_BIT |
++                   VK_PIPELINE_STAGE_2_BLIT_BIT |
++                   VK_PIPELINE_STAGE_2_CLEAR_BIT))
++      cats |= TU_BARRIER_CAT_SRC_XFER;
++   if (srcStage & (VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
++                   VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
++                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
++                   VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
++                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT |
++                   VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
++                   VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT))
++      cats |= TU_BARRIER_CAT_SRC_GFX;
++   if (srcStage & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
++      cats |= TU_BARRIER_CAT_SRC_ALL;
++   cats |= cmd->state.pass ? TU_BARRIER_CAT_IN_RP : TU_BARRIER_CAT_OUT_RP;
++
 +   cache->flush_bits |=
-+      (enum tu_cmd_flush_bits) tu_flush_hack_barrier_bits(cmd);
++      (enum tu_cmd_flush_bits) tu_flush_hack_barrier_bits(cmd, cats);
 +
     if (!no_sync) {
        enum tu_stage src_stage = vk2tu_src_stage(cmd->device, srcStage);
