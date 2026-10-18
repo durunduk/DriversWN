@@ -19,7 +19,7 @@ export BUILD_VERSION="${BUILD_VERSION:-1.0}"
 export EXTRA_PATCH=""
 # git patches applied after the scripts, see build_turnip.sh
 export GIT_PATCH_DIR="${GIT_PATCH_DIR-patches/a8xx-winnative}"
-export EXTRA_SCRIPT="patches/fix_gralloc_flushall.py:patches/fix_a8xx_dev_info.py:patches/apply_a8xx_gpus.py:patches/apply_a7xx_gen1_quirks.py:patches/apply_a7xx_gen2_ubwc_hint.py:patches/add_aimapper_gralloc.py:patches/add_ubwc_swapchain_usage.py"
+export EXTRA_SCRIPT="patches/fix_gralloc_flushall.py:patches/fix_a8xx_dev_info.py:patches/apply_a8xx_gpus.py:patches/apply_a7xx_gen1_quirks.py:patches/apply_a7xx_gen2_ubwc_hint.py:patches/add_aimapper_gralloc.py:patches/add_ubwc_swapchain_usage.py:patches/wn_device_name_tag.py"
 
 # Clone mesa once and build every variant from that same tree. Cloning per
 # variant let upstream advance between them, so a release could ship a -b and a
