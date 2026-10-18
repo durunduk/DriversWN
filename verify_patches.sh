@@ -36,6 +36,7 @@ common=(
 	"vk_physical_device vendor-usage field"
 	"turnip sets the vendor usage bit"
 	"wn_device_name_tag.py: done"
+	"enable_ubo16_opt_in.py: done"
 	"a8xx-winnative: applied 0001"
 	"a8xx-winnative: applied 0002"
 	"a8xx-winnative: applied 0003"
