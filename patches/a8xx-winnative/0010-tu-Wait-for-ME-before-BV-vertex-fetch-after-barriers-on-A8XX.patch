@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: durunduk <drebdebian@gmail.com>
+Date: Mon, 19 Oct 2026 04:10:00 +0300
+Subject: [PATCH] tu: Wait for ME before BV vertex fetch after barriers on A8XX
+
+tu_flush_for_stage() already emits CP_WAIT_FOR_ME right away on a8xx when
+the destination stage is TU_STAGE_BV_CP (indirect parameters), because
+a8xx dropped the implicit wait earlier GPUs had. The same is needed when
+the destination is TU_STAGE_BV (vertex input, index fetch, pre-raster
+shaders): the WFI alone does not stop BV from reading data written before
+the barrier.
+
+Seen on Styx: Blades of Greed (UE 5.6 through vkd3d-proton 0bb64c56,
+Adreno 840, sysmem): the second level renders shattered geometry.
+Bisected by adding flushes per barrier category (TU_FLUSH_HACK, 0009):
+
+  CP_WAIT_FOR_ME at barriers with dst TU_STAGE_BV       clean
+  CP_WAIT_MEM_WRITES at the same barriers               broken
+  same waits with dst TU_STAGE_BV_CP or BR only         broken
+  same waits at barriers outside a render pass only     clean
+  same waits at barriers inside a render pass only      broken
+
+CP_WAIT_FOR_ME only stalls the CP, so the cost is small.
+---
+diff --git a/src/freedreno/vulkan/tu_cmd_buffer.cc b/src/freedreno/vulkan/tu_cmd_buffer.cc
+index ad3bd17..c0abc7f 100644
+--- a/src/freedreno/vulkan/tu_cmd_buffer.cc
++++ b/src/freedreno/vulkan/tu_cmd_buffer.cc
+@@ -6472,6 +6472,14 @@ tu_flush_for_stage(struct tu_cache_state *cache,
+                cache->flush_bits |= TU_CMD_FLAG_WAIT_FOR_ME;
+             else
+                cache->pending_flush_bits |= TU_CMD_FLAG_WAIT_FOR_ME;
++         } else if (CHIP >= A8XX) {
++            /* On a8xx the WFI alone does not keep BV's vertex/index fetch
++             * from reading data written before the barrier either: UE5
++             * (vkd3d-proton) renders shattered geometry on Adreno 840 unless
++             * CP_WAIT_FOR_ME is emitted here too. CP_WAIT_MEM_WRITES did not
++             * help; CP_WAIT_FOR_ME alone did.
++             */
++            cache->flush_bits |= TU_CMD_FLAG_WAIT_FOR_ME;
+          }
+       } else {
+          if (CHIP >= A7XX && by_region)
