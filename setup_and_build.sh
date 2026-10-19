@@ -8,6 +8,7 @@
 #   bash setup_and_build.sh                 # balanced variant (b)
 #   VARIANT=p bash setup_and_build.sh       # performance variant
 #   BRANCH=main bash setup_and_build.sh     # another branch of the fork
+#   BRANCH=upstream/a8xx-bv-wait-for-me bash setup_and_build.sh   # the clean upstream fix only
 #   BASE_DIR=/mnt/build bash setup_and_build.sh   # work on another disk (sources, NDK, build)
 #
 # Run without downloading it first:
@@ -108,10 +109,14 @@ BUILD_VARIANTS="$VARIANT" ./build_wn_turnip.sh
 step "Checking that every patch was applied"
 # 0002 (WaveSize(32)) and 0004 (A8XX bindless invalidation) are the ones the
 # A8XX rendering fixes depend on; without them the zip is not worth testing.
-for n in 0002 0004; do
-	grep -q "a8xx-winnative: applied $n" "build_log_${VARIANT}.txt" \
-		|| fail "Patch $n of the A8XX series did not apply (see build_log_${VARIANT}.txt). Send that log."
-done
+# Branches without the git patch series (e.g. a clean branch for upstream)
+# skip this check.
+if [ -d patches/a8xx-winnative ]; then
+	for n in 0002 0004; do
+		grep -q "a8xx-winnative: applied $n" "build_log_${VARIANT}.txt" \
+			|| fail "Patch $n of the A8XX series did not apply (see build_log_${VARIANT}.txt). Send that log."
+	done
+fi
 if ! ./verify_patches.sh "$VARIANT"; then
 	echo "Warning: some other WinNative patches did not apply (lines above)."
 	echo "         The driver is still usable; send build_log_${VARIANT}.txt if something looks wrong."
