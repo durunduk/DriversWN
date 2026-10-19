@@ -35,6 +35,7 @@ common=(
 	"vendor UBWC bit on the AHB usage answer"
 	"vk_physical_device vendor-usage field"
 	"turnip sets the vendor usage bit"
+	"fix_a8xx_bv_wait_for_me.py: done"
 )
 
 # -p only: without these the archive is a -b wearing a -p name.
